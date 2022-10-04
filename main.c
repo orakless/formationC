@@ -3,13 +3,23 @@
 #include <malloc.h>
 
 enum {
-    iSzMax = 30,
-    iUEMax = 6,
-    iSemMax = 2
+    MAX_CHAR = 30,
+    NB_SEMESTRES = 2,
+    MIN_UE = 3,
+    MAX_UE = 6,
+    MAX_MATIERES = 10,
+    MAX_EPREUVES = 5,
+    MAX_ETUDIANTS = 100
 };
 
+
+/* Linked list structure.
+ * Each "node" of the list is composed of :
+ *      - a string, with a max size of 30 char.
+ *      - a pointer, which points towards the next node in the list.
+ */
 typedef struct {
-    char szValue[iSzMax];
+    char szValue[MAX_CHAR];
     struct node *clpNext;
 } node;
 
@@ -25,7 +35,7 @@ node *clHeadNode = NULL;
 node *clCurrentNode = NULL;
 
 // Creates a node at the beginning of the linked list.
-void newNode(const char szValue[iSzMax]) {
+void newNode(const char szValue[MAX_CHAR]) {
     node *clNewNode = (node *)malloc(sizeof(node));
     node *clPrevNode = clCurrentNode;
 
@@ -63,12 +73,11 @@ void printNodeValues() {
 
 // Parses the input, and puts it in the linked list. (from the start)
 void parseInputAsc(const char szUserInput[]) {
-    char szCurrentStr[iSzMax] = {0};
-    int i = 0;
+    char szCurrentStr[MAX_CHAR] = {0};
     limit limStr = {0, 1};
 
-    for (i=0; i < strlen(szUserInput); ++i) {
-        // Cuts the string at every " " char. (32 is " "'s code ASCII point)
+    for (int i=0; i < strlen(szUserInput); ++i) {
+        // Cuts the string at every " " char. (32 is ' 's code ASCII point)
         if (szUserInput[i] == 32) {
             limStr.max = i;
             if (limStr.min < limStr.max) {
@@ -97,14 +106,13 @@ void parseInputAsc(const char szUserInput[]) {
 
 // Parses the input, and puts it in the linked list. (from the end)
 void parseInputDes(const char szUserInput[]) {
-    char szCurrentStr[iSzMax] = {0};
-    // Explicit int conversion since the user will surely NOT need more than a
+    char szCurrentStr[MAX_CHAR] = {0};
+    // Explicit int conversion since the user will surely NOT need more than an
     // int for his input.
-    int i = (int) strlen(szUserInput);
     limit limStr = {(int)strlen(szUserInput)-2,
                     (int)strlen(szUserInput)-1};
 
-    for (i; i > -1; --i) {
+    for (int i = (int) strlen(szUserInput); i > -1; --i) {
         // Cuts the string at every " ". (32 is " "'s code ASCII point)
         if (szUserInput[i] == 32) {
             limStr.min = i+1;
@@ -114,8 +122,8 @@ void parseInputDes(const char szUserInput[]) {
                 newNode(szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * 30);
             }
-            limStr.min = i-1;
-            limStr.max = i;
+            limStr.min = i;
+            limStr.max = i+1;
 
             // Checks if we're at the end of the string.
             // If true, we put the last word in the linked list.
@@ -123,7 +131,7 @@ void parseInputDes(const char szUserInput[]) {
             limStr.min = 0;
             if (limStr.min < limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
-                       (limStr.max - limStr.min) * sizeof(char));
+                       (limStr.max - limStr.min)+1 * sizeof(char));
                 newNode(szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * 30);
             }
@@ -131,12 +139,20 @@ void parseInputDes(const char szUserInput[]) {
     }
 }
 
+char * getNodeValue(unsigned int uIndex) {
+    node *clCurrentLocalNode = clCurrentNode;
+    for (int i = 0; i <= uIndex; ++i) {
+        if (clCurrentLocalNode->clpNext != NULL) {
+            clCurrentLocalNode = (node *) clCurrentLocalNode->clpNext;
+        } else break;
+    }
+    return clCurrentLocalNode->szValue;
+}
 
 unsigned int getStringId(char szUserInput[]) {
-    int i = 0;
     unsigned int uWeightString = 0;
 
-    for(i=0; i<strlen(szUserInput); i++) {
+    for(int i=0; i<strlen(szUserInput); i++) {
         uWeightString += szUserInput[i];
     }
 
@@ -144,8 +160,9 @@ unsigned int getStringId(char szUserInput[]) {
 }
 
 
-void getCommand() {
-    switch (getStringId(clCurrentNode->szValue)) {
+void callCommand() {
+    printf("You wanted to use: ");
+    switch (getStringId(getNodeValue(0))) {
         case 975: // formation
             printf("formation");
             break;
@@ -171,16 +188,27 @@ void getCommand() {
             printf("This command doesn't exist.");
             break;
     }
+    printf("\n");
 }
 
-/*
-void checkCommand(char szTest[]) {
-    unsigned int iCommandID = getStringId(szTest);
-    printf("%s ID: %u\n", szTest, iCommandID);
-}*/
+void getUserInput(char szaDest[]) {
+    scanf("%s", szaDest);
+}
+
+void routine() {
+    do {
+        printf("$ ");
+        char szaUserInput[255] = {0};
+        getUserInput(szaUserInput);
+        parseInputDes(szaUserInput);
+        if (strcmp(getNodeValue(0), "exit") == 0) {
+            break;
+        }
+        callCommand();
+        delAllNodes();
+    } while (1);
+}
 
 int main() {
-    parseInputDes("formatioddn 3 1 test  def de 1 2 ecole www 145 =!d");
-    getCommand();
-    delAllNodes();
+    routine();
 }
