@@ -181,7 +181,10 @@ void parseInputDes(const char szUserInput[]) {
 // Get linked list length.
 int getLinkedListLength() {
     int i = 1;
-    for (i; clCurrentNode->clpNext != NULL; ++i);
+    node * clLocalCurrentNode = clCurrentNode;
+    for (i; clLocalCurrentNode->clpNext != NULL; ++i) {
+        clLocalCurrentNode = (node *)clLocalCurrentNode->clpNext;
+    };
     return i;
 }
 
@@ -199,12 +202,12 @@ char *getNodeValue(unsigned int uIndex) {
     return clCurrentLocalNode->szValue;
 }
 
-double getNodeValueAsDouble(unsigned int uIndex) {
+float getNodeValueAsFloat(unsigned int uIndex) {
     char *szValue = getNodeValue(uIndex);
     if (szValue == NULL) {
         return -1.f;
     }
-    double dValue = 0;
+    float fValue = 0;
     int i = 0;
     int iDotIndex = -1;
 
@@ -215,24 +218,26 @@ double getNodeValueAsDouble(unsigned int uIndex) {
         }
     }
 
-    // if there's no period, put it's index after the max index.
+    // if there's no period, put its index after the max index.
     if (iDotIndex == -1) iDotIndex = i+1;
 
     // -48 = conversion between ASCII codes and actual numbers.
     for (i; i >= 0; --i) {
         if (i > iDotIndex) {
             // multiply by 10^-1, -2... if we're before the dot
-            dValue += (double)(szValue[i]-48)*pow(10.f,-(i-iDotIndex));
+            fValue += (float)
+                      ((double)(szValue[i]-48)*pow(10.f,-(i-iDotIndex)));
         } else if (i < iDotIndex) {
             // multiply by 10^1, 10^2... if we're after the dot
-            dValue += (double)(szValue[i]-48)*pow(10.f, iDotIndex-1-i);
+            fValue += (float)
+                      ((szValue[i]-48)*pow(10.f, iDotIndex-1-i));
         }
     }
-    return dValue;
+    return fValue;
 }
 
 int getNodeValueAsInt(unsigned int uIndex) {
-    return (int)getNodeValueAsDouble(uIndex);
+    return (int)getNodeValueAsFloat(uIndex);
 }
 
 /*******************
@@ -251,7 +256,7 @@ unsigned int getStringId(char szUserInput[]) {
 
 
 int formation(Formation * form) {
-    int uNbUE = (int)getNodeValueAsDouble(1);
+    int uNbUE = getNodeValueAsInt(1);
     if (form->uNbUE == 0) {
         if (uNbUE < MIN_UE || uNbUE > MAX_UE) {
             return 1; // Number is out of range
@@ -267,15 +272,11 @@ int formation(Formation * form) {
     }
 }
 
-bool isEpreuveNameTaken(Semestre * semestre) {
-    for (int iMatiereIndex = 0;
-         iMatiereIndex < semestre->uNbMatieres; ++iMatiereIndex) {
-        Matiere *matiere = &semestre->matieres[iMatiereIndex];
-        for (int iEpreuveIndex = 0;
-             iEpreuveIndex < matiere->uNbEpreuves; ++iEpreuveIndex) {
-            if (strcmp(matiere->epreuves, getNodeValue(2)) == 0) {
-                return true; // There's already an Epreuve called like that.
-            }
+bool isEpreuveNameTaken(Matiere * matiere) {
+    for (int iEpreuveIndex = 0;
+         iEpreuveIndex < matiere->uNbEpreuves; ++iEpreuveIndex) {
+        if (strcmp(matiere->epreuves->szNom, getNodeValue(3)) == 0) {
+            return true; // There's already an Epreuve called like that.
         }
     }
     return false;
@@ -294,44 +295,65 @@ bool areCoefCorrect(unsigned int uNbUE) {
     return true;
 }
 
-bool isMatiereNameTaken(const Semestre * semestre, const char szValue[]) {
-    for (int i; i < semestre->uNbMatieres; ++i) {
-        if (strcmp(semestre->matieres[i].szNom, szValue) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
 
 void newMatiere(Semestre * semestre, const char szValue[MAX_CHAR]) {
     char *szDest = semestre->matieres[semestre->uNbMatieres++].szNom;
     strcpy(szDest, szValue);
+    semestre->matieres[semestre->uNbMatieres-1].uNbEpreuves = 0;
+}
+
+void newEpreuve(Matiere * matiere, const char szValue[MAX_CHAR]) {
+    char *szDest = matiere->epreuves[matiere->uNbEpreuves++].szNom;
+    strcpy(szDest, szValue);
+}
+
+Matiere * getMatiereByName(Semestre * semestre, const char szValue[MAX_CHAR]) {
+    for (int i; i < semestre->uNbMatieres; ++i) {
+        if (strcmp(semestre->matieres[i].szNom, szValue) == 0) {
+            return &semestre->matieres[i];
+        }
+    }
+    newMatiere(semestre, szValue);
+    return &semestre->matieres[semestre->uNbMatieres-1];
+}
+
+Epreuve * getEpreuveByName(Matiere * matiere, const char szValue[MAX_CHAR]) {
+    for (int i; i < matiere->uNbEpreuves; ++i) {
+        if (strcmp(matiere->epreuves[i].szNom, szValue) == 0) {
+            return &matiere->epreuves[i];
+        }
+    }
+    newEpreuve(matiere, szValue);
+    return &matiere->epreuves[matiere->uNbEpreuves-1];
 }
 
 int epreuve(Formation * form) {
     if (getNodeValueAsInt(1) > NB_SEMESTRES ||
         getNodeValueAsInt(1) < 1) {
         return 1; // Number is out of range.
+    }
 
-    } else if (getLinkedListLength() != 4+form->uNbUE) {
+    if (getLinkedListLength() != 4+form->uNbUE) {
         return 2; // Missing argument.
 
     } else {
-        int iSemestreIndex = getNodeValueAsInt(1);
+        int iSemestreIndex = getNodeValueAsInt(1)-1;
 
         if (!areCoefCorrect(form->uNbUE)) {
             return 3; // There's no coefficient greater than 0.
         }
-        if (isEpreuveNameTaken(&form->semestres[iSemestreIndex])) {
+
+        Matiere * matiere = getMatiereByName(&form->semestres[iSemestreIndex],
+                                             getNodeValue(2));
+
+        if (isEpreuveNameTaken(matiere)) {
             return 4; // There's already an Epreuve called like that.
         }
-        if (form->semestres[iSemestreIndex].uNbMatieres == 0 ||
-            !isMatiereNameTaken(&form->semestres[iSemestreIndex],
-            getNodeValue(2))
-        ) {
-            newMatiere(&form->semestres[iSemestreIndex], getNodeValue(2));
-        } else {
 
+        Epreuve * epreuve = getEpreuveByName(matiere, getNodeValue(3));
+
+        for (int iUE = 0; iUE < form->uNbUE; ++iUE) {
+            epreuve->fCoef[iUE] = getNodeValueAsFloat(4+iUE);
         }
 
         return 0; // Everything went well
@@ -413,7 +435,7 @@ void routine(Formation * pf) {
             break;
         }
 
-        //printf("%lf\n", getNodeValueAsDouble(1));
+        //printf("%d\n", getLinkedListLength());
 
         callCommand(pf);
         delAllNodes();
@@ -423,6 +445,8 @@ void routine(Formation * pf) {
 int main() {
     Formation f;
     Formation * pf = &f;
+    f.semestres[0].uNbMatieres = 0;
+    f.semestres[1].uNbMatieres = 0;
     f.uNbUE = 0;
 
     routine(pf);
