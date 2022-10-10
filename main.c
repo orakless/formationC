@@ -1,9 +1,19 @@
+/************************************
+ SAE 1.01 (C)
+    Interpréteur de commande & modélisation
+ d'une formation.
+
+ Créé le 28/09/2022.
+
+ */
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
+#include <math.h>
+#include <stdbool.h>
 
 enum {
-    MAX_CHAR = 30,
+    MAX_CHAR = 31,
     NB_SEMESTRES = 2,
     MIN_UE = 3,
     MAX_UE = 6,
@@ -15,39 +25,69 @@ enum {
 
 /* Linked list structure.
  * Each "node" of the list is composed of :
- *      - a string, with a max size of 30 char.
- *      - a pointer, which points towards the next node in the list.
+ *      - a string, szValue, with a max size of MAX_CHAR char.
+ *      - a pointer, clpNext, which points towards the next node in the list.
  */
 typedef struct {
     char szValue[MAX_CHAR];
     struct node *clpNext;
 } node;
 
-
 typedef struct {
     int min;
     int max;
 } limit;
 
+typedef struct {
+    char szNom[MAX_CHAR];
+    float fCoef[MAX_UE];
+} Epreuve;
 
-// Initialization of the last and of the current node, as NULL.
-node *clHeadNode = NULL;
+typedef struct {
+    char szNom[MAX_CHAR];
+    unsigned int uNbEpreuves;
+    Epreuve epreuves[MAX_EPREUVES];
+} Matiere;
+
+typedef struct {
+    unsigned int uNbMatieres;
+    Matiere matieres[MAX_MATIERES];
+} Semestre;
+
+typedef struct {
+    unsigned int uNbUE;
+    Semestre semestres[NB_SEMESTRES];
+} Formation;
+
+// Initialization of the current node, as NULL.
 node *clCurrentNode = NULL;
 
 // Creates a node at the beginning of the linked list.
 void newNode(const char szValue[MAX_CHAR]) {
-    node *clNewNode = (node *)malloc(sizeof(node));
-    node *clPrevNode = clCurrentNode;
+    // Allocates enough memory for the new node
+    node *clNewNode = (node *) malloc(sizeof(node));
 
+    // Cleans the area and then copies the value given by the user in the new
+    // node.
+    //memset(&clNewNode->szValue, 0, sizeof(char) * 30);
     strcpy(clNewNode->szValue, szValue);
-    clNewNode->clpNext = (struct node *)clPrevNode;
+
+    // Links the current node to the new node.
+    clNewNode->clpNext = (struct node *) clCurrentNode;
+
+    // Makes the new node the current one, so we don't lose track of it.
     clCurrentNode = clNewNode;
 }
 
 // Removes the node at the beginning of the linked list.
 void delNode() {
+    // A pointer that points toward the current node.
     node *clNodeToDelete = clCurrentNode;
+
+    // Sets the next node in the linked list as the current one.
     clCurrentNode = (node *)clCurrentNode->clpNext;
+
+    // Deletes the node.
     free(clNodeToDelete);
 }
 
@@ -97,12 +137,11 @@ void parseInputAsc(const char szUserInput[]) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min) * sizeof(char));
                 newNode(szCurrentStr);
-                memset(&szCurrentStr, 0, sizeof(char) * 30);
+                memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
         }
     }
 }
-
 
 // Parses the input, and puts it in the linked list. (from the end)
 void parseInputDes(const char szUserInput[]) {
@@ -116,14 +155,14 @@ void parseInputDes(const char szUserInput[]) {
         // Cuts the string at every " ". (32 is " "'s code ASCII point)
         if (szUserInput[i] == 32) {
             limStr.min = i+1;
-            if (limStr.min < limStr.max) {
+            if (limStr.min <= limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
-                       (limStr.max - limStr.min) * sizeof(char));
+                       (limStr.max - limStr.min)+1 * sizeof(char));
                 newNode(szCurrentStr);
-                memset(&szCurrentStr, 0, sizeof(char) * 30);
+                memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
-            limStr.min = i;
-            limStr.max = i+1;
+            limStr.min = i-2;
+            limStr.max = i-1;
 
             // Checks if we're at the end of the string.
             // If true, we put the last word in the linked list.
@@ -133,44 +172,209 @@ void parseInputDes(const char szUserInput[]) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min)+1 * sizeof(char));
                 newNode(szCurrentStr);
-                memset(&szCurrentStr, 0, sizeof(char) * 30);
+                memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
         }
     }
 }
 
-char * getNodeValue(unsigned int uIndex) {
+// Get linked list length.
+int getLinkedListLength() {
+    int i = 1;
+    for (i; clCurrentNode->clpNext != NULL; ++i);
+    return i;
+}
+
+char *getNodeValue(unsigned int uIndex) {
     node *clCurrentLocalNode = clCurrentNode;
-    for (int i = 0; i <= uIndex; ++i) {
+
+    for (int i = 0; i < uIndex; ++i) {
         if (clCurrentLocalNode->clpNext != NULL) {
             clCurrentLocalNode = (node *) clCurrentLocalNode->clpNext;
-        } else break;
+        } else {
+            return NULL;
+            break;
+        }
     }
     return clCurrentLocalNode->szValue;
 }
 
+double getNodeValueAsDouble(unsigned int uIndex) {
+    char *szValue = getNodeValue(uIndex);
+    if (szValue == NULL) {
+        return -1.f;
+    }
+    double dValue = 0;
+    int i = 0;
+    int iDotIndex = -1;
+
+    // Get number max index, and dot index if there's a period.
+    for (i; szValue[i+1] != 0; ++i) {
+        if (szValue[i] == 46) { // 46 = period (".") ASCII code.
+            iDotIndex = i;
+        }
+    }
+
+    // if there's no period, put it's index after the max index.
+    if (iDotIndex == -1) iDotIndex = i+1;
+
+    // -48 = conversion between ASCII codes and actual numbers.
+    for (i; i >= 0; --i) {
+        if (i > iDotIndex) {
+            // multiply by 10^-1, -2... if we're before the dot
+            dValue += (double)(szValue[i]-48)*pow(10.f,-(i-iDotIndex));
+        } else if (i < iDotIndex) {
+            // multiply by 10^1, 10^2... if we're after the dot
+            dValue += (double)(szValue[i]-48)*pow(10.f, iDotIndex-1-i);
+        }
+    }
+    return dValue;
+}
+
+int getNodeValueAsInt(unsigned int uIndex) {
+    return (int)getNodeValueAsDouble(uIndex);
+}
+
+/*******************
+ End of node struct
+********************/
+
+
 unsigned int getStringId(char szUserInput[]) {
     unsigned int uWeightString = 0;
 
-    for(int i=0; i<strlen(szUserInput); i++) {
+    for(int i=0; i < strlen(szUserInput); i++) {
         uWeightString += szUserInput[i];
     }
-
     return uWeightString;
 }
 
 
-void callCommand() {
-    printf("You wanted to use: ");
+int formation(Formation * form) {
+    int uNbUE = (int)getNodeValueAsDouble(1);
+    if (form->uNbUE == 0) {
+        if (uNbUE < MIN_UE || uNbUE > MAX_UE) {
+            return 1; // Number is out of range
+        }
+        form->uNbUE = uNbUE;
+        return 0; // Everything went well
+    } else {
+        if (uNbUE == -1) {
+            return -1; // Prints UE number
+        } else {
+            return 2; // Number of UE already defined
+        }
+    }
+}
+
+bool isEpreuveNameTaken(Semestre * semestre) {
+    for (int iMatiereIndex = 0;
+         iMatiereIndex < semestre->uNbMatieres; ++iMatiereIndex) {
+        Matiere *matiere = &semestre->matieres[iMatiereIndex];
+        for (int iEpreuveIndex = 0;
+             iEpreuveIndex < matiere->uNbEpreuves; ++iEpreuveIndex) {
+            if (strcmp(matiere->epreuves, getNodeValue(2)) == 0) {
+                return true; // There's already an Epreuve called like that.
+            }
+        }
+    }
+    return false;
+}
+
+bool areCoefCorrect(unsigned int uNbUE) {
+    for (int i = 5; i < uNbUE+5; ++i) {
+        // Checks if there's at least one coefficient greater than 0
+        if (i == uNbUE - 1) {
+            return false; // There's no coefficient greater than 0
+
+        } else if (getNodeValue(i) > 0) {
+            break;
+        }
+    }
+    return true;
+}
+
+bool isMatiereNameTaken(const Semestre * semestre, const char szValue[]) {
+    for (int i; i < semestre->uNbMatieres; ++i) {
+        if (strcmp(semestre->matieres[i].szNom, szValue) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void newMatiere(Semestre * semestre, const char szValue[MAX_CHAR]) {
+    char *szDest = semestre->matieres[semestre->uNbMatieres++].szNom;
+    strcpy(szDest, szValue);
+}
+
+int epreuve(Formation * form) {
+    if (getNodeValueAsInt(1) > NB_SEMESTRES ||
+        getNodeValueAsInt(1) < 1) {
+        return 1; // Number is out of range.
+
+    } else if (getLinkedListLength() != 4+form->uNbUE) {
+        return 2; // Missing argument.
+
+    } else {
+        int iSemestreIndex = getNodeValueAsInt(1);
+
+        if (!areCoefCorrect(form->uNbUE)) {
+            return 3; // There's no coefficient greater than 0.
+        }
+        if (isEpreuveNameTaken(&form->semestres[iSemestreIndex])) {
+            return 4; // There's already an Epreuve called like that.
+        }
+        if (form->semestres[iSemestreIndex].uNbMatieres == 0 ||
+            !isMatiereNameTaken(&form->semestres[iSemestreIndex],
+            getNodeValue(2))
+        ) {
+            newMatiere(&form->semestres[iSemestreIndex], getNodeValue(2));
+        } else {
+
+        }
+
+        return 0; // Everything went well
+    }
+}
+
+void callCommand(Formation * form) {
+    //printf("You wanted to use: ");
     switch (getStringId(getNodeValue(0))) {
         case 975: // formation
-            printf("formation");
+            switch (formation(form)) {
+                case -1:
+                    printf("Le nombre d'UE est de : %d", form->uNbUE);
+                    break;
+                case 0:
+                    printf("Le nombre d'UE est defini");
+                    break;
+                case 1:
+                    printf("Le nombre d'UE est incorrect");
+                    break;
+                case 2:
+                    printf("Le nombre d'UE est deja defini");
+            }
             break;
         case 764: // epreuve
-            printf("epreuve");
+            switch (epreuve(form)) {
+                case 0:
+                    printf("Epreuve ajoutee a la formation");
+                    break;
+                case 1:
+                    printf("Le numero de semestre est incorrect");
+                    break;
+                case 2:
+                case 3:
+                    printf("Au moins un des coefficients est incorrect");
+                    break;
+                case 4:
+                    printf("Une meme epreuve existe deja");
+                    break;
+            }
             break;
-        case 1151: // coefficient
-            printf("coefficient");
+        case 1266: // coefficients
+            printf("coefficients");
             break;
         case 438: // note
             printf("note");
@@ -191,24 +395,35 @@ void callCommand() {
     printf("\n");
 }
 
-void getUserInput(char szaDest[]) {
-    scanf("%s", szaDest);
-}
 
-void routine() {
+void routine(Formation * pf) {
     do {
-        printf("$ ");
         char szaUserInput[255] = {0};
-        getUserInput(szaUserInput);
+        printf("$ ");
+
+        /* %[^\n]s gets every char until it encounters a \n. The space before
+         * is to circumvent an issue we can see in while loops : the
+         * scanf will try to register the newline before the input area. So we
+         * use a space to "refresh" the input field.
+         */
+        scanf(" %[^\n]s", &szaUserInput);
+
         parseInputDes(szaUserInput);
         if (strcmp(getNodeValue(0), "exit") == 0) {
             break;
         }
-        callCommand();
+
+        //printf("%lf\n", getNodeValueAsDouble(1));
+
+        callCommand(pf);
         delAllNodes();
     } while (1);
 }
 
 int main() {
-    routine();
+    Formation f;
+    Formation * pf = &f;
+    f.uNbUE = 0;
+
+    routine(pf);
 }
