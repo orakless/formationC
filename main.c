@@ -72,7 +72,7 @@ typedef struct {
 typedef struct {
     Matiere * pMatiere;
     unsigned int uNbNotes;
-    Notes notes[MAX_EPREUVES];
+    Notes notes[MAX_EPREUVES*MAX_MATIERES];
 } NotesMatiere;
 
 typedef struct {
@@ -86,11 +86,8 @@ typedef struct {
     Etudiant etudiants[MAX_ETUDIANTS];
 } Promotion;
 
-// Initialization of the current node, as NULL.
-node *clCurrentNode = NULL;
-
 // Creates a node at the beginning of the linked list.
-void newNode(const char szValue[MAX_CHAR]) {
+void newNode(node * clCurrentNode, const char szValue[MAX_CHAR]) {
     // Allocates enough memory for the new node
     node *clNewNode = (node *) malloc(sizeof(node));
 
@@ -107,7 +104,7 @@ void newNode(const char szValue[MAX_CHAR]) {
 }
 
 // Removes the node at the beginning of the linked list.
-void delNode() {
+void delNode(node * clCurrentNode) {
     // A pointer that points toward the current node.
     node *clNodeToDelete = clCurrentNode;
 
@@ -119,16 +116,16 @@ void delNode() {
 }
 
 // Removes EVERY node in the linked list.
-void delAllNodes() {
+void delAllNodes(node * clCurrentNode) {
     node *clNextNode = NULL;
     while (clCurrentNode != NULL) {
         clNextNode = (node *)clCurrentNode->clpNext;
-        delNode();
+        delNode(clCurrentNode);
         clCurrentNode = clNextNode;
     }
 }
 
-void printNodeValues() {
+void printNodeValues(node * clCurrentNode) {
     node *clLocalCurrentNode = clCurrentNode;
     unsigned int uNbIndex = 0;
     while (clLocalCurrentNode != NULL) {
@@ -139,7 +136,7 @@ void printNodeValues() {
 }
 
 // Parses the input, and puts it in the linked list. (from the start)
-void parseInputAsc(const char szUserInput[]) {
+void parseInputAsc(node * clCurrentNode, const char szUserInput[]) {
     char szCurrentStr[MAX_CHAR] = {0};
     limit limStr = {0, 1};
 
@@ -150,7 +147,7 @@ void parseInputAsc(const char szUserInput[]) {
             if (limStr.min < limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min) * sizeof(char));
-                newNode(szCurrentStr);
+                newNode(clCurrentNode, szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * 30);
             }
             limStr.min = i+1;
@@ -163,7 +160,7 @@ void parseInputAsc(const char szUserInput[]) {
             if (limStr.min < limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min) * sizeof(char));
-                newNode(szCurrentStr);
+                newNode(clCurrentNode, szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
         }
@@ -171,7 +168,7 @@ void parseInputAsc(const char szUserInput[]) {
 }
 
 // Parses the input, and puts it in the linked list. (from the end)
-void parseInputDes(const char szUserInput[]) {
+void parseInputDes(node * clCurrentNode, const char szUserInput[]) {
     char szCurrentStr[MAX_CHAR] = {0};
     // Explicit int conversion since the user will surely NOT need more than an
     // int for his input.
@@ -185,7 +182,7 @@ void parseInputDes(const char szUserInput[]) {
             if (limStr.min <= limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min)+1 * sizeof(char));
-                newNode(szCurrentStr);
+                newNode(clCurrentNode, szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
             limStr.min = i-2;
@@ -198,7 +195,7 @@ void parseInputDes(const char szUserInput[]) {
             if (limStr.min < limStr.max) {
                 memcpy(&szCurrentStr, &szUserInput[limStr.min],
                        (limStr.max - limStr.min)+1 * sizeof(char));
-                newNode(szCurrentStr);
+                newNode(clCurrentNode, szCurrentStr);
                 memset(&szCurrentStr, 0, sizeof(char) * MAX_CHAR);
             }
         }
@@ -206,7 +203,7 @@ void parseInputDes(const char szUserInput[]) {
 }
 
 // Get linked list length.
-int getLinkedListLength() {
+int getLinkedListLength(node * clCurrentNode) {
     int i = 1;
     node * clLocalCurrentNode = clCurrentNode;
     for (i; clLocalCurrentNode->clpNext != NULL; ++i) {
@@ -215,7 +212,7 @@ int getLinkedListLength() {
     return i;
 }
 
-char *getNodeValue(unsigned int uIndex) {
+char *getNodeValue(node * clCurrentNode, unsigned int uIndex) {
     node *clCurrentLocalNode = clCurrentNode;
 
     for (int i = 0; i < uIndex; ++i) {
@@ -223,14 +220,13 @@ char *getNodeValue(unsigned int uIndex) {
             clCurrentLocalNode = (node *) clCurrentLocalNode->clpNext;
         } else {
             return NULL;
-            break;
         }
     }
     return clCurrentLocalNode->szValue;
 }
 
-float getNodeValueAsFloat(unsigned int uIndex) {
-    char *szValue = getNodeValue(uIndex);
+float getNodeValueAsFloat(node * clCurrentNode, unsigned int uIndex) {
+    char *szValue = getNodeValue(clCurrentNode, uIndex);
     if (szValue == NULL) {
         return -1.f;
     }
@@ -263,14 +259,13 @@ float getNodeValueAsFloat(unsigned int uIndex) {
     return fValue;
 }
 
-int getNodeValueAsInt(unsigned int uIndex) {
-    return (int)getNodeValueAsFloat(uIndex);
+int getNodeValueAsInt(node * clCurrentNode, unsigned int uIndex) {
+    return (int)getNodeValueAsFloat(clCurrentNode, uIndex);
 }
 
 /*******************
  End of node struct
 ********************/
-
 
 unsigned int getStringId(char szUserInput[]) {
     unsigned int uWeightString = 0;
@@ -282,10 +277,10 @@ unsigned int getStringId(char szUserInput[]) {
 }
 
 
-bool isEpreuveNameTaken(Matiere * matiere) {
+bool isEpreuveNameTaken(node * clCurrentNode, Matiere * matiere) {
     for (int iEpreuveIndex = 0;
          iEpreuveIndex < matiere->uNbEpreuves; ++iEpreuveIndex) {
-        if (strcmp(matiere->epreuves->szNom, getNodeValue(3)) == 0) {
+        if (strcmp(matiere->epreuves->szNom, getNodeValue(clCurrentNode, 3)) == 0) {
             return true; // There's already an Epreuve called like that.
         }
     }
@@ -293,13 +288,13 @@ bool isEpreuveNameTaken(Matiere * matiere) {
 }
 
 
-bool areCoefCorrect(unsigned int uNbUE) {
+bool areCoefCorrect(node * clCurrentNode, unsigned int uNbUE) {
     for (int i = 5; i < uNbUE+5; ++i) {
         // Checks if there's at least one coefficient greater than 0
         if (i == uNbUE - 1) {
             return false; // There's no coefficient greater than 0
 
-        } else if (getNodeValue(i) > 0) {
+        } else if (getNodeValue(clCurrentNode, i) > 0) {
             break;
         }
     }
@@ -307,7 +302,7 @@ bool areCoefCorrect(unsigned int uNbUE) {
 }
 
 
-void newMatiere(Semestre * semestre, const char szValue[MAX_CHAR]) {
+void newMatiere(node * clCurrentNode, Semestre * semestre, const char szValue[MAX_CHAR]) {
     char *szDest = semestre->matieres[semestre->uNbMatieres++].szNom;
     strcpy(szDest, szValue);
     semestre->matieres[semestre->uNbMatieres-1].uNbEpreuves = 0;
@@ -315,24 +310,25 @@ void newMatiere(Semestre * semestre, const char szValue[MAX_CHAR]) {
 }
 
 
-void newEpreuve(Matiere * matiere, const char szValue[MAX_CHAR]) {
+void newEpreuve(node * clCurrentNode, Matiere * matiere, const char szValue[MAX_CHAR]) {
     char *szDest = matiere->epreuves[matiere->uNbEpreuves++].szNom;
     strcpy(szDest, szValue);
 }
 
 
-void newEtudiant(Promotion * promotion) {
+void newEtudiant(node * clCurrentNode, Promotion * promotion) {
     unsigned int uIndexEtudiant = promotion->uNbEtudiants++;
     Etudiant * nvEtudiant = &promotion->etudiants[uIndexEtudiant];
 
-    strcpy(nvEtudiant->szNom, getNodeValue(2));
+    strcpy(nvEtudiant->szNom, getNodeValue(clCurrentNode, 2));
     nvEtudiant->uNbMatieres = 0;
 
     printf("Etudiant ajoute a la formation\n");
 }
 
 
-Matiere * getMatiereByName(Semestre * semestre,
+Matiere * getMatiereByName(node * clCurrentNode,
+                           Semestre * semestre,
                            const char szValue[MAX_CHAR],
                            bool createMatiere) {
     for (int i = 0; i < semestre->uNbMatieres; ++i) {
@@ -341,7 +337,7 @@ Matiere * getMatiereByName(Semestre * semestre,
         }
     }
     if (createMatiere) {
-        newMatiere(semestre, szValue);
+        newMatiere(clCurrentNode, semestre, szValue);
         return &semestre->matieres[semestre->uNbMatieres - 1];
     } else {
         return NULL;
@@ -349,7 +345,8 @@ Matiere * getMatiereByName(Semestre * semestre,
 }
 
 
-Epreuve * getEpreuveByName(Matiere * matiere,
+Epreuve * getEpreuveByName(node * clCurrentNode,
+                           Matiere * matiere,
                            const char szValue[MAX_CHAR],
                            bool createEpreuve) {
     for (int i = 0; i < matiere->uNbEpreuves; ++i) {
@@ -358,7 +355,7 @@ Epreuve * getEpreuveByName(Matiere * matiere,
         }
     }
     if (createEpreuve) {
-        newEpreuve(matiere, szValue);
+        newEpreuve(clCurrentNode, matiere, szValue);
         return &matiere->epreuves[matiere->uNbEpreuves - 1];
     } else {
         return NULL;
@@ -366,19 +363,21 @@ Epreuve * getEpreuveByName(Matiere * matiere,
 }
 
 
-Epreuve * searchAllEpreuveByName(Semestre * semestre,
+Epreuve * searchAllEpreuveByName(node * clCurrentNode,
+                                 Semestre * semestre,
                                  const char szValue[MAX_CHAR]) {
     Epreuve * epreuve = NULL;
     for (int i = 0; i < semestre->uNbMatieres; ++i) {
         Matiere * matiere = &semestre->matieres[i];
-        epreuve = getEpreuveByName(matiere, szValue, false);
+        epreuve = getEpreuveByName(clCurrentNode, matiere, szValue, false);
         if (epreuve != NULL) break;
     }
     return NULL;
 }
 
 
-Etudiant * getEtudiantByName(Formation * form,
+Etudiant * getEtudiantByName(node * clCurrentNode,
+                             Formation * form,
                              Promotion * promotion,
                              const char szValue[MAX_CHAR],
                              bool createEtudiant) {
@@ -389,10 +388,7 @@ Etudiant * getEtudiantByName(Formation * form,
     }
 
     if (createEtudiant) {
-        /*Etudiant *pNewEtud = &promotion->etudiants[promotions->uNbEtudiants];
-        pNewEtud->uNbMatieres = 0;
-        strcpy(pNewEtud->szNom, szValue);*/
-        newEtudiant(promotion);
+        newEtudiant(clCurrentNode, promotion);
         return &promotion->etudiants[promotion->uNbEtudiants-1];
     }
 
@@ -400,22 +396,26 @@ Etudiant * getEtudiantByName(Formation * form,
 }
 
 
-void newMatiereEtudiant(Semestre * semestre, Etudiant * etudiant) {
+void newMatiereEtudiant(node * clCurrentNode, Semestre * semestre, Etudiant * etudiant) {
     unsigned int uIndexMatiere = etudiant->uNbMatieres++;
     NotesMatiere * nvMatiere = &etudiant->matieres[uIndexMatiere];
 
-    nvMatiere->pMatiere = getMatiereByName(semestre,
-                                           getNodeValue(3),
+    nvMatiere->pMatiere = getMatiereByName(clCurrentNode, semestre,
+                                           getNodeValue(clCurrentNode, 3),
                                            0);
     nvMatiere->uNbNotes = 0;
 }
 
 
-void newNoteEtudiant(Epreuve * epreuve, NotesMatiere * matiere) {
-
+void newNoteEtudiant(node * clCurrentNode, Epreuve * epreuve, NotesMatiere * matiere) {
+    unsigned int uIndexNote = matiere->uNbNotes++;
+    Notes * note = &matiere->notes[uIndexNote];
+    note->pEpreuve = epreuve;
+    note->fNote = getNodeValueAsFloat(clCurrentNode, 5);
 }
 
-NotesMatiere * getEtudiantMatiereByName(Semestre * semestre,
+NotesMatiere * getEtudiantMatiereByName(node * clCurrentNode,
+                                        Semestre * semestre,
                                         Etudiant * etudiant,
                                         const char szValue[MAX_CHAR],
                                         bool createMatiere) {
@@ -428,7 +428,7 @@ NotesMatiere * getEtudiantMatiereByName(Semestre * semestre,
     }
 
     if (createMatiere) {
-        newMatiereEtudiant(semestre, etudiant);
+        newMatiereEtudiant(clCurrentNode, semestre, etudiant);
         return &etudiant->matieres[etudiant->uNbMatieres-1];
     }
     return NULL;
@@ -436,7 +436,8 @@ NotesMatiere * getEtudiantMatiereByName(Semestre * semestre,
 }
 
 
-Notes * getNoteByEpreuveName(Formation * form,
+Notes * getNoteByEpreuveName(node * clCurrentNode,
+                             Formation * form,
                              NotesMatiere * matiere,
                              const char szValue[MAX_CHAR],
                              bool createNote) {
@@ -452,8 +453,8 @@ Notes * getNoteByEpreuveName(Formation * form,
 }
 
 
-int formation(Formation * form) {
-    int uNbUE = getNodeValueAsInt(1);
+int formation(node * clCurrentNode, Formation * form) {
+    int uNbUE = getNodeValueAsInt(clCurrentNode, 1);
     if (form->uNbUE == 0) {
         if (uNbUE < MIN_UE || uNbUE > MAX_UE) {
             return 1; // Number is out of range
@@ -470,33 +471,37 @@ int formation(Formation * form) {
 }
 
 
-int epreuve(Formation * form) {
-    if (getNodeValueAsInt(1) > NB_SEMESTRES ||
-        getNodeValueAsInt(1) < 1) {
+int epreuve(node * clCurrentNode, Formation * form) {
+    if (getNodeValueAsInt(clCurrentNode, 1) > NB_SEMESTRES ||
+        getNodeValueAsInt(clCurrentNode, 1) < 1) {
         return 1; // Number is out of range.
     }
 
-    if (getLinkedListLength() != 4+form->uNbUE) {
+    if (getLinkedListLength(clCurrentNode) != 4+form->uNbUE) {
         return 2; // Missing argument.
 
     } else {
-        int iSemestreIndex = getNodeValueAsInt(1)-1;
+        int iSemestreIndex = getNodeValueAsInt(clCurrentNode, 1)-1;
 
-        if (!areCoefCorrect(form->uNbUE)) {
+        if (!areCoefCorrect(clCurrentNode, form->uNbUE)) {
             return 3; // There's no coefficient greater than 0.
         }
 
-        Matiere * matiere = getMatiereByName(&form->semestres[iSemestreIndex],
-                                             getNodeValue(2), true);
+        Matiere * matiere = getMatiereByName(clCurrentNode,
+                                             &form->semestres[iSemestreIndex],
+                                             getNodeValue(clCurrentNode, 2),
+                                             true);
 
-        if (isEpreuveNameTaken(matiere)) {
+        if (isEpreuveNameTaken(clCurrentNode, matiere)) {
             return 4; // There's already an Epreuve called like that.
         }
 
-        Epreuve * epreuve = getEpreuveByName(matiere, getNodeValue(3), true);
+        Epreuve * epreuve = getEpreuveByName(clCurrentNode, matiere,
+                                             getNodeValue(clCurrentNode, 3),
+                                             true);
 
         for (int iUE = 0; iUE < form->uNbUE; ++iUE) {
-            epreuve->fCoef[iUE] = getNodeValueAsFloat(4+iUE);
+            epreuve->fCoef[iUE] = getNodeValueAsFloat(clCurrentNode, 4+iUE);
         }
 
         return 0; // Everything went well
@@ -504,69 +509,78 @@ int epreuve(Formation * form) {
 }
 
 
-int note(Formation * form, Promotion * promotion) {
-    if (getNodeValueAsInt(1) < 1 || getNodeValueAsInt(2) > 2) {
+int note(node * clCurrentNode, Formation * form, Promotion * promotion) {
+
+    // Checks if the semestre number is correct
+    if (getNodeValueAsInt(clCurrentNode, 1) < 1 ||
+        getNodeValueAsInt(clCurrentNode, 2) > 2) {
         return 1;
     }
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)];
+    Semestre * semestre = &form->semestres[getNodeValueAsInt(clCurrentNode, 1)];
 
-    Matiere * matiere = getMatiereByName(semestre,
-                                         getNodeValue(3),
+    Matiere * matiere = getMatiereByName(clCurrentNode,
+                                         semestre,
+                                         getNodeValue(clCurrentNode, 3),
                                          0);
 
-    if (matiere == NULL) {
+    if (matiere == NULL) { // Checks if the matiere exists
         return 2;
     }
 
-    Epreuve * epreuve = getEpreuveByName(matiere,
-                                         getNodeValue(4),
+    Epreuve * epreuve = getEpreuveByName(clCurrentNode,
+                                         matiere,
+                                         getNodeValue(clCurrentNode, 4),
                                          0);
 
-    if (epreuve == NULL) {
+    if (epreuve == NULL) { // Checks if the epreuve exists
         return 3;
     }
 
 
-
-    if (getNodeValueAsInt(5) < NOTE_MIN || getNodeValueAsInt(5) > NOTE_MAX) {
+    // Checks if the grade is between
+    if (getNodeValueAsInt(clCurrentNode, 5) < NOTE_MIN ||
+        getNodeValueAsInt(clCurrentNode, 5) > NOTE_MAX) {
         return 4;
     }
 
-    Etudiant * etudiant = getEtudiantByName(form, promotion,
-                                            getNodeValue(1), 1);
+    Etudiant * etudiant = getEtudiantByName(clCurrentNode, form, promotion,
+                                            getNodeValue(clCurrentNode, 1),
+                                            1);
 
     if (etudiant->uNbMatieres > 0) {
-        NotesMatiere * notesMatiere = getEtudiantMatiereByName(semestre,
-                                                              etudiant,
-                                                              getNodeValue(3),
-                                                              0);
+        NotesMatiere * notesMatiere = getEtudiantMatiereByName(clCurrentNode,
+                                                 semestre,
+                                                 etudiant,
+                                                 getNodeValue(clCurrentNode, 3),
+                                                 0);
         if (notesMatiere != NULL) {
-            Notes * note = getNoteByEpreuveName(form, notesMatiere,
-                                        getNodeValue(4),
+            Notes * note = getNoteByEpreuveName(clCurrentNode, form, notesMatiere,
+                                        getNodeValue(clCurrentNode, 4),
                                       0);
             if (note != NULL) {
                 return 5;
             } else {
-                newNoteEtudiant(getEpreuveByName(matiere,
-                                                 getNodeValue(4),
-                                                 0),
+                newNoteEtudiant(clCurrentNode,
+                                getEpreuveByName(clCurrentNode, matiere,
+                                               getNodeValue(clCurrentNode, 4),
+                                               0),
                                 notesMatiere);
             }
         } else {
-            notesMatiere = getEtudiantMatiereByName(semestre, etudiant,
-                                               getNodeValue(3), 1);
+            notesMatiere = getEtudiantMatiereByName(clCurrentNode, semestre, etudiant,
+                                               getNodeValue(clCurrentNode, 3),
+                                               1);
         }
     }
 
     return 0;
 }
 
-void callCommand(Formation * form, Promotion * promotion) {
-    //printf("You wanted to use: ");
-    switch (getStringId(getNodeValue(0))) {
+void callCommand(node * clCurrentNode, Formation * form, Promotion * promotion) {
+    switch (getStringId(getNodeValue(clCurrentNode, 0))) {
         case 975: // formation
-            switch (formation(form)) {
+            switch (formation(clCurrentNode, form)) {
                 case -1:
                     printf("Le nombre d'UE est de : %d", form->uNbUE);
                     break;
@@ -581,7 +595,7 @@ void callCommand(Formation * form, Promotion * promotion) {
             }
             break;
         case 764: // epreuve
-            switch (epreuve(form)) {
+            switch (epreuve(clCurrentNode, form)) {
                 case 0:
                     printf("Epreuve ajoutee a la formation");
                     break;
@@ -601,7 +615,7 @@ void callCommand(Formation * form, Promotion * promotion) {
             printf("coefficients");
             break;
         case 438: // note
-            note(form, promotion);
+            note(clCurrentNode, form, promotion);
             break;
         case 553: // notes
             printf("notes");
@@ -620,7 +634,7 @@ void callCommand(Formation * form, Promotion * promotion) {
 }
 
 
-void routine(Formation * pf, Promotion * promotion) {
+void routine(node * clCurrentNode, Formation * pf, Promotion * promotion) {
     do {
         char szaUserInput[255] = {0};
         printf("$ ");
@@ -632,20 +646,23 @@ void routine(Formation * pf, Promotion * promotion) {
          */
         scanf(" %[^\n]s", &szaUserInput);
 
-        parseInputDes(szaUserInput);
-        if (strcmp(getNodeValue(0), "exit") == 0) {
+        parseInputDes(clCurrentNode, szaUserInput);
+        if (strcmp(getNodeValue(clCurrentNode, 0), "exit") == 0) {
             break;
         }
 
         //printf("%d\n", getLinkedListLength());
 
-        callCommand(pf, promotion);
-        delAllNodes();
+        callCommand(clCurrentNode, pf, promotion);
+        delAllNodes(clCurrentNode);
     } while (1);
 }
 
 
 int main() {
+    // Initialization of the current node, as NULL.
+    node *clCurrentNode = NULL;
+
     Formation f;
     Formation * pf = &f;
 
@@ -658,5 +675,5 @@ int main() {
     f.semestres[1].uNbMatieres = 0;
     f.uNbUE = 0;
 
-    routine(pf, ppromotion);
+    routine(clCurrentNode, pf, ppromotion);
 }
