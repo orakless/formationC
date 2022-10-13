@@ -19,7 +19,9 @@ enum {
     MAX_UE = 6,
     MAX_MATIERES = 10,
     MAX_EPREUVES = 5,
-    MAX_ETUDIANTS = 100
+    MAX_ETUDIANTS = 100,
+    NOTE_MIN = 0,
+    NOTE_MAX = 20
 };
 
 
@@ -37,6 +39,8 @@ typedef struct {
     int min;
     int max;
 } limit;
+
+/* Structure formation */
 
 typedef struct {
     char szNom[MAX_CHAR];
@@ -58,6 +62,29 @@ typedef struct {
     unsigned int uNbUE;
     Semestre semestres[NB_SEMESTRES];
 } Formation;
+
+
+typedef struct {
+    Epreuve * pEpreuve;
+    float fNote;
+} Notes;
+
+typedef struct {
+    Matiere * pMatiere;
+    unsigned int uNbNotes;
+    Notes notes[MAX_EPREUVES];
+} NotesMatiere;
+
+typedef struct {
+    char szNom[MAX_CHAR];
+    unsigned int uNbMatieres;
+    NotesMatiere matieres[MAX_MATIERES];
+} Etudiant;
+
+typedef struct {
+    unsigned int uNbEtudiants;
+    Etudiant etudiants[MAX_ETUDIANTS];
+} Promotion;
 
 // Initialization of the current node, as NULL.
 node *clCurrentNode = NULL;
@@ -255,23 +282,6 @@ unsigned int getStringId(char szUserInput[]) {
 }
 
 
-int formation(Formation * form) {
-    int uNbUE = getNodeValueAsInt(1);
-    if (form->uNbUE == 0) {
-        if (uNbUE < MIN_UE || uNbUE > MAX_UE) {
-            return 1; // Number is out of range
-        }
-        form->uNbUE = uNbUE;
-        return 0; // Everything went well
-    } else {
-        if (uNbUE == -1) {
-            return -1; // Prints UE number
-        } else {
-            return 2; // Number of UE already defined
-        }
-    }
-}
-
 bool isEpreuveNameTaken(Matiere * matiere) {
     for (int iEpreuveIndex = 0;
          iEpreuveIndex < matiere->uNbEpreuves; ++iEpreuveIndex) {
@@ -281,6 +291,7 @@ bool isEpreuveNameTaken(Matiere * matiere) {
     }
     return false;
 }
+
 
 bool areCoefCorrect(unsigned int uNbUE) {
     for (int i = 5; i < uNbUE+5; ++i) {
@@ -300,32 +311,164 @@ void newMatiere(Semestre * semestre, const char szValue[MAX_CHAR]) {
     char *szDest = semestre->matieres[semestre->uNbMatieres++].szNom;
     strcpy(szDest, szValue);
     semestre->matieres[semestre->uNbMatieres-1].uNbEpreuves = 0;
+    printf("Matiere ajoutee a la formation\n");
 }
+
 
 void newEpreuve(Matiere * matiere, const char szValue[MAX_CHAR]) {
     char *szDest = matiere->epreuves[matiere->uNbEpreuves++].szNom;
     strcpy(szDest, szValue);
 }
 
-Matiere * getMatiereByName(Semestre * semestre, const char szValue[MAX_CHAR]) {
-    for (int i; i < semestre->uNbMatieres; ++i) {
+
+void newEtudiant(Promotion * promotion) {
+    unsigned int uIndexEtudiant = promotion->uNbEtudiants++;
+    Etudiant * nvEtudiant = &promotion->etudiants[uIndexEtudiant];
+
+    strcpy(nvEtudiant->szNom, getNodeValue(2));
+    nvEtudiant->uNbMatieres = 0;
+
+    printf("Etudiant ajoute a la formation\n");
+}
+
+
+Matiere * getMatiereByName(Semestre * semestre,
+                           const char szValue[MAX_CHAR],
+                           bool createMatiere) {
+    for (int i = 0; i < semestre->uNbMatieres; ++i) {
         if (strcmp(semestre->matieres[i].szNom, szValue) == 0) {
             return &semestre->matieres[i];
         }
     }
-    newMatiere(semestre, szValue);
-    return &semestre->matieres[semestre->uNbMatieres-1];
+    if (createMatiere) {
+        newMatiere(semestre, szValue);
+        return &semestre->matieres[semestre->uNbMatieres - 1];
+    } else {
+        return NULL;
+    }
 }
 
-Epreuve * getEpreuveByName(Matiere * matiere, const char szValue[MAX_CHAR]) {
-    for (int i; i < matiere->uNbEpreuves; ++i) {
+
+Epreuve * getEpreuveByName(Matiere * matiere,
+                           const char szValue[MAX_CHAR],
+                           bool createEpreuve) {
+    for (int i = 0; i < matiere->uNbEpreuves; ++i) {
         if (strcmp(matiere->epreuves[i].szNom, szValue) == 0) {
             return &matiere->epreuves[i];
         }
     }
-    newEpreuve(matiere, szValue);
-    return &matiere->epreuves[matiere->uNbEpreuves-1];
+    if (createEpreuve) {
+        newEpreuve(matiere, szValue);
+        return &matiere->epreuves[matiere->uNbEpreuves - 1];
+    } else {
+        return NULL;
+    }
 }
+
+
+Epreuve * searchAllEpreuveByName(Semestre * semestre,
+                                 const char szValue[MAX_CHAR]) {
+    Epreuve * epreuve = NULL;
+    for (int i = 0; i < semestre->uNbMatieres; ++i) {
+        Matiere * matiere = &semestre->matieres[i];
+        epreuve = getEpreuveByName(matiere, szValue, false);
+        if (epreuve != NULL) break;
+    }
+    return NULL;
+}
+
+
+Etudiant * getEtudiantByName(Formation * form,
+                             Promotion * promotion,
+                             const char szValue[MAX_CHAR],
+                             bool createEtudiant) {
+    for (int i = 0; i < promotion->uNbEtudiants; ++i) {
+        if (strcmp(promotion->etudiants[i].szNom, szValue) == 0) {
+            return &promotion->etudiants[i];
+        }
+    }
+
+    if (createEtudiant) {
+        /*Etudiant *pNewEtud = &promotion->etudiants[promotions->uNbEtudiants];
+        pNewEtud->uNbMatieres = 0;
+        strcpy(pNewEtud->szNom, szValue);*/
+        newEtudiant(promotion);
+        return &promotion->etudiants[promotion->uNbEtudiants-1];
+    }
+
+    return NULL;
+}
+
+
+void newMatiereEtudiant(Semestre * semestre, Etudiant * etudiant) {
+    unsigned int uIndexMatiere = etudiant->uNbMatieres++;
+    NotesMatiere * nvMatiere = &etudiant->matieres[uIndexMatiere];
+
+    nvMatiere->pMatiere = getMatiereByName(semestre,
+                                           getNodeValue(3),
+                                           0);
+    nvMatiere->uNbNotes = 0;
+}
+
+
+void newNoteEtudiant(Epreuve * epreuve, NotesMatiere * matiere) {
+
+}
+
+NotesMatiere * getEtudiantMatiereByName(Semestre * semestre,
+                                        Etudiant * etudiant,
+                                        const char szValue[MAX_CHAR],
+                                        bool createMatiere) {
+    Matiere * matiere = NULL;
+    for (int i = 0; i < etudiant->uNbMatieres; ++i) {
+        matiere = etudiant->matieres[i].pMatiere;
+        if (strcmp(matiere->szNom, szValue) == 0) {
+            return &etudiant->matieres[i];
+        }
+    }
+
+    if (createMatiere) {
+        newMatiereEtudiant(semestre, etudiant);
+        return &etudiant->matieres[etudiant->uNbMatieres-1];
+    }
+    return NULL;
+
+}
+
+
+Notes * getNoteByEpreuveName(Formation * form,
+                             NotesMatiere * matiere,
+                             const char szValue[MAX_CHAR],
+                             bool createNote) {
+    for (int i = 0; i < matiere->uNbNotes; ++i) {
+        Epreuve * epreuve = matiere->notes[i].pEpreuve;
+        if (strcmp(epreuve->szNom, szValue) == 0) {
+            return &matiere->notes[i];
+        }
+    }
+    if (createNote) {
+
+    }
+}
+
+
+int formation(Formation * form) {
+    int uNbUE = getNodeValueAsInt(1);
+    if (form->uNbUE == 0) {
+        if (uNbUE < MIN_UE || uNbUE > MAX_UE) {
+            return 1; // Number is out of range
+        }
+        form->uNbUE = uNbUE;
+        return 0; // Everything went well
+    } else {
+        if (uNbUE == -1) {
+            return -1; // Prints UE number
+        } else {
+            return 2; // Number of UE already defined
+        }
+    }
+}
+
 
 int epreuve(Formation * form) {
     if (getNodeValueAsInt(1) > NB_SEMESTRES ||
@@ -344,13 +487,13 @@ int epreuve(Formation * form) {
         }
 
         Matiere * matiere = getMatiereByName(&form->semestres[iSemestreIndex],
-                                             getNodeValue(2));
+                                             getNodeValue(2), true);
 
         if (isEpreuveNameTaken(matiere)) {
             return 4; // There's already an Epreuve called like that.
         }
 
-        Epreuve * epreuve = getEpreuveByName(matiere, getNodeValue(3));
+        Epreuve * epreuve = getEpreuveByName(matiere, getNodeValue(3), true);
 
         for (int iUE = 0; iUE < form->uNbUE; ++iUE) {
             epreuve->fCoef[iUE] = getNodeValueAsFloat(4+iUE);
@@ -358,6 +501,45 @@ int epreuve(Formation * form) {
 
         return 0; // Everything went well
     }
+}
+
+
+int note(Formation * form, Promotion * promotion) {
+    if (getNodeValueAsInt(1) < 1 || getNodeValueAsInt(2) > 2) {
+        return 1;
+    }
+
+    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)];
+
+    if (getMatiereByName(semestre,
+                         getNodeValue(3), 0) == NULL) {
+        return 2;
+    }
+    if (searchAllEpreuveByName(semestre,
+                               getNodeValue(4)) == NULL) {
+        return 3;
+    }
+    if (getNodeValueAsInt(5) < NOTE_MIN || getNodeValueAsInt(5) > NOTE_MAX) {
+        return 4;
+    }
+
+    Etudiant * etudiant = getEtudiantByName(form, promotion,
+                                            getNodeValue(1), 1);
+
+    if (etudiant->uNbMatieres > 0) {
+        NotesMatiere * matiere = getEtudiantMatiereByName(semestre, etudiant,
+                                                          getNodeValue(3),
+                                                          0);
+        if (matiere != NULL) {
+
+        } else {
+            matiere = getEtudiantMatiereByName(semestre, etudiant,
+                                               getNodeValue(3), 1);
+        }
+
+    }
+
+    return 0;
 }
 
 void callCommand(Formation * form) {
@@ -418,7 +600,7 @@ void callCommand(Formation * form) {
 }
 
 
-void routine(Formation * pf) {
+void routine(Formation * pf, Promotion * promotion) {
     do {
         char szaUserInput[255] = {0};
         printf("$ ");
@@ -442,12 +624,19 @@ void routine(Formation * pf) {
     } while (1);
 }
 
+
 int main() {
     Formation f;
     Formation * pf = &f;
+
+    Promotion promotion;
+    Promotion * ppromotion = &promotion;
+
+    promotion.uNbEtudiants = 0;
+
     f.semestres[0].uNbMatieres = 0;
     f.semestres[1].uNbMatieres = 0;
     f.uNbUE = 0;
 
-    routine(pf);
+    routine(pf, ppromotion);
 }
