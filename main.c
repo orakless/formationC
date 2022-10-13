@@ -511,14 +511,24 @@ int note(Formation * form, Promotion * promotion) {
 
     Semestre * semestre = &form->semestres[getNodeValueAsInt(1)];
 
-    if (getMatiereByName(semestre,
-                         getNodeValue(3), 0) == NULL) {
+    Matiere * matiere = getMatiereByName(semestre,
+                                         getNodeValue(3),
+                                         0);
+
+    if (matiere == NULL) {
         return 2;
     }
-    if (searchAllEpreuveByName(semestre,
-                               getNodeValue(4)) == NULL) {
+
+    Epreuve * epreuve = getEpreuveByName(matiere,
+                                         getNodeValue(4),
+                                         0);
+
+    if (epreuve == NULL) {
         return 3;
     }
+
+
+
     if (getNodeValueAsInt(5) < NOTE_MIN || getNodeValueAsInt(5) > NOTE_MAX) {
         return 4;
     }
@@ -527,22 +537,32 @@ int note(Formation * form, Promotion * promotion) {
                                             getNodeValue(1), 1);
 
     if (etudiant->uNbMatieres > 0) {
-        NotesMatiere * matiere = getEtudiantMatiereByName(semestre, etudiant,
-                                                          getNodeValue(3),
-                                                          0);
-        if (matiere != NULL) {
-
+        NotesMatiere * notesMatiere = getEtudiantMatiereByName(semestre,
+                                                              etudiant,
+                                                              getNodeValue(3),
+                                                              0);
+        if (notesMatiere != NULL) {
+            Notes * note = getNoteByEpreuveName(form, notesMatiere,
+                                        getNodeValue(4),
+                                      0);
+            if (note != NULL) {
+                return 5;
+            } else {
+                newNoteEtudiant(getEpreuveByName(matiere,
+                                                 getNodeValue(4),
+                                                 0),
+                                notesMatiere);
+            }
         } else {
-            matiere = getEtudiantMatiereByName(semestre, etudiant,
+            notesMatiere = getEtudiantMatiereByName(semestre, etudiant,
                                                getNodeValue(3), 1);
         }
-
     }
 
     return 0;
 }
 
-void callCommand(Formation * form) {
+void callCommand(Formation * form, Promotion * promotion) {
     //printf("You wanted to use: ");
     switch (getStringId(getNodeValue(0))) {
         case 975: // formation
@@ -581,7 +601,7 @@ void callCommand(Formation * form) {
             printf("coefficients");
             break;
         case 438: // note
-            printf("note");
+            note(form, promotion);
             break;
         case 553: // notes
             printf("notes");
@@ -619,7 +639,7 @@ void routine(Formation * pf, Promotion * promotion) {
 
         //printf("%d\n", getLinkedListLength());
 
-        callCommand(pf);
+        callCommand(pf, promotion);
         delAllNodes();
     } while (1);
 }
