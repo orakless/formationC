@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 enum {
     MAX_CHAR = 31,
@@ -256,12 +257,10 @@ float getNodeValueAsFloat(unsigned int uIndex) {
     for (i; i >= 0; --i) {
         if (i > iDotIndex) {
             // multiply by 10^-1, -2... if we're before the dot
-            fValue += (float)
-                      ((double)(szValue[i]-48)*pow(10.f,-(i-iDotIndex)));
+            fValue += (float)(szValue[i]-48)*powf(10.f,(float)-(i-iDotIndex));
         } else if (i < iDotIndex) {
             // multiply by 10^1, 10^2... if we're after the dot
-            fValue += (float)
-                      ((szValue[i]-48)*pow(10.f, iDotIndex-1-i));
+            fValue += (float)(szValue[i]-48)*powf(10.f, (float)(iDotIndex-1-i));
         }
     }
     return fValue;
@@ -404,21 +403,22 @@ void newNoteEtudiant(Epreuve * epreuve, NotesMatiere * matiere, float fNote) {
     note->fNote = fNote;
 }
 
+
 NotesMatiere * getEtudiantMatiereByName(Semestre * semestre,
-                                        NotesSemestre * etudiant,
+                                        NotesSemestre * nSemestre,
                                         const char szValue[MAX_CHAR],
                                         bool createMatiere) {
     Matiere * matiere = NULL;
-    for (int i = 0; i < etudiant->uNbMatieres; ++i) {
-        matiere = etudiant->matieres[i].pMatiere;
+    for (int i = 0; i < nSemestre->uNbMatieres; ++i) {
+        matiere = nSemestre->matieres[i].pMatiere;
         if (strcmp(matiere->szNom, szValue) == 0) {
-            return &etudiant->matieres[i];
+            return &nSemestre->matieres[i];
         }
     }
 
     if (createMatiere) {
-        newMatiereEtudiant(semestre, etudiant);
-        return &etudiant->matieres[etudiant->uNbMatieres-1];
+        newMatiereEtudiant(semestre, nSemestre);
+        return &nSemestre->matieres[nSemestre->uNbMatieres-1];
     }
     return NULL;
 
@@ -446,6 +446,149 @@ Note * getNoteByEpreuveName(Formation * form,
 }
 
 
+bool checkNotes(Semestre * semestre, NotesSemestre * nSemestre) {
+    if (nSemestre->uNbMatieres == semestre->uNbMatieres) {
+        for (int i = 0; i < nSemestre->uNbMatieres; ++i) {
+            Matiere * matiere = &semestre->matieres[i];
+            NotesMatiere * notesMatiere = &nSemestre->matieres[i];
+            if (notesMatiere->uNbNotes != matiere->uNbEpreuves) {
+                return false;
+            }
+        }
+    } else {
+        return false;
+    }
+    return true;
+}
+
+
+int max(int i1, int i2) {
+    return (i1 < i2) ? i2
+                     : i1;
+}
+
+
+int getLongestMatiereName(Semestre * semestre) {
+    int iLength = 0;
+    for (int i = 0; i < semestre->uNbMatieres; ++i) {
+        Matiere * matiere = &semestre->matieres[i];
+        iLength = max(iLength, (int)strlen(matiere->szNom));
+    }
+    return iLength;
+}
+
+
+float trimNumber(float fNb) {
+    return floorf(fNb*10)/10;
+}
+
+
+float getMoyenneMatiere(NotesMatiere * nMatiere, unsigned int uIndexUE,
+                        bool trim) {
+    float divid = 0, divis = 0;
+    for (int i = 0; i < nMatiere->uNbNotes; ++i) {
+        divid += nMatiere->notes[i].fNote*nMatiere->notes[i]
+                .pEpreuve->fCoef[uIndexUE];
+        divis += nMatiere->notes[i].pEpreuve->fCoef[uIndexUE];
+    }
+    if (divis == 0) {
+        return -1.f;
+    }
+    if (trim) {
+        return trimNumber(divid / divis);
+    } else {
+        return divid / divis;
+    }
+}
+
+float getMoyenneUE(NotesSemestre * nSemestre, unsigned int uIndexUE, bool trim) {
+    float iDivid = 0;
+    float iDivis = 0;
+
+    for (int iIndMat = 0; iIndMat < nSemestre->uNbMatieres; ++iIndMat) {
+        NotesMatiere * nMatiere = &nSemestre->matieres[iIndMat];
+        for (int iIndNote = 0; iIndNote < nMatiere->uNbNotes; ++iIndNote) {
+            Note * note = &nMatiere->notes[iIndNote];
+            iDivid += note->fNote * note->pEpreuve->fCoef[uIndexUE];
+            iDivis += note->pEpreuve->fCoef[uIndexUE];
+        }
+    }
+    if (iDivis == 0) {
+        return -1.f;
+    }
+    if (trim) {
+        return trimNumber(iDivid / iDivis);
+    } else {
+        return iDivid / iDivis;
+    }
+
+}
+
+
+void printUELine(unsigned int iMaxName, unsigned int uNbUE) {
+    for (int i = 0; i <= iMaxName; ++i) {
+        printf(" ");
+    }
+    for (int i = 1; i <= uNbUE; ++i) {
+        printf(" UE%d ", i);
+    }
+    printf("\n");
+}
+
+
+void printReleveLine(Matiere * matiere, NotesMatiere * nMatiere,
+                     unsigned int iMaxName, unsigned int uNbUE) {
+    printf("%s", matiere->szNom);
+    for (int i = 0; i <= iMaxName - strlen(matiere->szNom); ++i) {
+        printf(" ");
+    }
+    for (int i = 0; i < uNbUE; ++i) {
+        float iMoyenne = getMoyenneMatiere(nMatiere, i, true);
+        if (iMoyenne != -1) {
+            if (iMoyenne < 10) {
+                printf(" ");
+            }
+            printf("%0.1f ", iMoyenne);
+        } else {
+            printf("  ND ");
+        }
+    }
+    printf("\n");
+}
+
+
+void printMoyenneUELine(NotesSemestre * nSemestre, unsigned int iMaxName,
+                        unsigned int uNbUE, const char szTitle[]) {
+    printf("%s", szTitle);
+    for (int i = 0; i <= iMaxName - 8; ++i) {
+        printf(" ");
+    }
+    for (int iUE = 0; iUE < uNbUE; ++iUE) {
+        float fMoyenne = getMoyenneUE(nSemestre, iUE, true);
+        if (fMoyenne < 10) {
+            printf(" ");
+        }
+        printf("%0.1f ", fMoyenne);
+    }
+}
+
+
+void printMoyenneSem(Etudiant * etudiant, bool isUEValidated[MAX_UE]) {
+    printf("Moyennes annuelles ");
+    for (int iIndUE = 0; iIndUE < 2; ++iIndUE) {
+        NotesSemestre * nSemestre1 = &etudiant->semestres[0];
+        NotesSemestre * nSemestre2 = &etudiant->semestres[1];
+        float fMoySem = trimNumber((getMoyenneUE(nSemestre1, iIndUE, false)
+                        +getMoyenneUE(nSemestre2, iIndUE, false))/2);
+        if (fMoySem < 10) {
+            printf(" ");
+        }
+        printf("%0.1f ", fMoySem);
+        isUEValidated[iIndUE] = (fMoySem > 10) ? true
+                                               : false;
+    }
+}
+
 int formation(Formation * form) {
     int uNbUE = getNodeValueAsInt(1);
     if (form->uNbUE == 0) {
@@ -464,59 +607,64 @@ int formation(Formation * form) {
 }
 
 
-int epreuve(Formation * form) {
-    if (getNodeValueAsInt(1) > NB_SEMESTRES ||
-        getNodeValueAsInt(1) < 1) {
+int epreuve(Formation * form, int iIndSemestre, char szMatiereName[MAX_CHAR],
+            char szEpreuveName[MAX_CHAR], float coef, ...) {
+    va_list coefficients;
+    float coefs = coef;
+
+    if (iIndSemestre > NB_SEMESTRES ||
+        iIndSemestre < 1) {
         return 1; // Number is out of range.
     }
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)-1];
+    Semestre * semestre = &form->semestres[iIndSemestre-1];
 
+    /*
     if (getLinkedListLength() != 4+form->uNbUE) {
         return 2; // Missing argument.
+    }*/
 
-    }
-
-    Matiere * matiere = getMatiereByName(semestre,getNodeValue(2),false);
+    Matiere * matiere = getMatiereByName(semestre,szMatiereName, false);
 
     Epreuve * epreuve = (matiere == NULL) ? NULL
-            : getEpreuveByName(matiere,getNodeValue(3),false);
+            : getEpreuveByName(matiere,szEpreuveName, false);
+
+    va_start(coefficients, coef);
 
     if (epreuve != NULL) {
+        va_end(coefficients);
         return 4;
     } else {
         if (!areCoefCorrect(form->uNbUE)) {
+            va_end(coefficients);
             return 3; // There's no coefficient greater than 0.
         } else {
             if (matiere == NULL) {
-                newMatiere(semestre, getNodeValue(2));
+                newMatiere(semestre, szMatiereName);
                 matiere = &semestre->matieres[semestre->uNbMatieres-1];
             }
-            newEpreuve(matiere, getNodeValue(3));
+            newEpreuve(matiere, szEpreuveName);
             epreuve = &matiere->epreuves[matiere->uNbEpreuves-1];
         }
     }
 
-
-
-
     for (int iUE = 0; iUE < form->uNbUE; ++iUE) {
         epreuve->fCoef[iUE] = getNodeValueAsFloat(4+iUE);
     }
-
+    va_end(coefficients);
     return 0; // Everything went well
 }
 
 
-int coefficients(const Formation * form) {
-    if (getNodeValueAsInt(1) < 1 || getNodeValueAsInt(1) > 2) {
+int coefficients(Formation * form, unsigned int iIndSemestre) {
+    if (iIndSemestre < 1 || iIndSemestre > 2) {
         return 1;
     }
 
     float fCoefs[MAX_UE] = {0};
     unsigned int iCountEpreuve = 0;
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)-1];
+    Semestre * semestre = &form->semestres[iIndSemestre-1];
 
 
     for (int iM = 0; iM < semestre->uNbMatieres; ++iM) {
@@ -544,18 +692,20 @@ int coefficients(const Formation * form) {
 }
 
 
-int note(Formation * form, Promotion * promotion) {
+int note(Formation * form, Promotion * promotion, int iIndSemestre,
+         char szEtudiantName[MAX_CHAR], char szMatiereName[MAX_CHAR],
+         char szEpreuveName[MAX_CHAR], float iNote) {
 
     // Checks if the semestre number is correct
-    if (getNodeValueAsInt(1) < 1 ||
-        getNodeValueAsInt(1) > 2) {
+    if (iIndSemestre < 1 ||
+        iIndSemestre > 2) {
         return 1;
     }
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)-1];
+    Semestre * semestre = &form->semestres[iIndSemestre-1];
 
     Matiere * matiere = getMatiereByName(semestre,
-                                         getNodeValue(3),
+                                         szMatiereName,
                                          0);
 
     if (matiere == NULL) { // Checks if the matiere exists
@@ -563,7 +713,7 @@ int note(Formation * form, Promotion * promotion) {
     }
 
     Epreuve * epreuve = getEpreuveByName(matiere,
-                                         getNodeValue(4),
+                                         szEpreuveName,
                                          0);
 
     if (epreuve == NULL) { // Checks if the epreuve exists
@@ -572,43 +722,43 @@ int note(Formation * form, Promotion * promotion) {
 
 
     // Checks if the grade is between
-    if (getNodeValueAsInt(5) < NOTE_MIN ||
-        getNodeValueAsInt(5) > NOTE_MAX) {
+    if (iNote < NOTE_MIN ||
+        iNote > NOTE_MAX) {
         return 4;
     }
 
     Etudiant * etudiant = getEtudiantByName(promotion,
-                                            getNodeValue(2),
+                                            szEtudiantName,
                                             1);
 
 
-    NotesSemestre * nSemestre = &etudiant->semestres[getNodeValueAsInt(1)-1];
+    NotesSemestre * nSemestre = &etudiant->semestres[iIndSemestre-1];
 
     NotesMatiere * notesMatiere = getEtudiantMatiereByName(
                                                  semestre,
                                                  nSemestre,
-                                                 getNodeValue(3),
+                                                 szMatiereName,
                                                  0);
 
     if (notesMatiere != NULL) {
         Note * note = getNoteByEpreuveName(form, notesMatiere,
-                                    getNodeValue(4),
+                                    szEpreuveName,
                                   0);
         if (note != NULL) {
             return 5;
         } else {
             newNoteEtudiant(getEpreuveByName(matiere,
-                                           getNodeValue(4),
+                                           szEpreuveName,
                                            0),
                             notesMatiere,
                             getNodeValueAsFloat(5));
         }
     } else {
         notesMatiere = getEtudiantMatiereByName(semestre, nSemestre,
-                                           getNodeValue(3),
+                                           szMatiereName,
                                            1);
         newNoteEtudiant(getEpreuveByName(matiere,
-                                         getNodeValue(4),
+                                         szEpreuveName,
                                          0),
                                          notesMatiere,
                         getNodeValueAsFloat(5));
@@ -618,31 +768,24 @@ int note(Formation * form, Promotion * promotion) {
 }
 
 
-int notes(Formation * form, Promotion * promotion) {
-    if (getNodeValueAsInt(1) < 1 || getNodeValueAsInt(1) > 2) {
+int notes(Formation * form, Promotion * promotion, unsigned int iIndSemestre,
+          char szEtudiantName[MAX_CHAR]) {
+    if (iIndSemestre < 1 || iIndSemestre > 2) {
         return 1;
     }
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)-1];
+    Semestre * semestre = &form->semestres[iIndSemestre-1];
 
-    Etudiant * etudiant = getEtudiantByName(promotion, getNodeValue(2),
+    Etudiant * etudiant = getEtudiantByName(promotion, szEtudiantName,
                                             false);
 
     if (etudiant == NULL) {
         return 2;
     }
 
-    NotesSemestre * nSemestre = &etudiant->semestres[getNodeValueAsInt(1)-1];
+    NotesSemestre * nSemestre = &etudiant->semestres[iIndSemestre-1];
 
-    if (nSemestre->uNbMatieres == semestre->uNbMatieres) {
-        for (int i = 0; i < nSemestre->uNbMatieres; ++i) {
-            Matiere * matiere = &semestre->matieres[i];
-            NotesMatiere * notesMatiere = &nSemestre->matieres[i];
-            if (notesMatiere->uNbNotes != matiere->uNbEpreuves) {
-                return 3;
-            }
-        }
-    } else {
+    if (!checkNotes(semestre, nSemestre)) {
         return 3;
     }
 
@@ -650,46 +793,83 @@ int notes(Formation * form, Promotion * promotion) {
 }
 
 
-int max(int i1, int i2) {
-    return (i1 < i2) ? i2
-                     : i1;
-}
-
-int getLongestMatiereName(Semestre * semestre) {
-    int iLength = 0;
-    for (int i = 0; i < semestre->uNbMatieres; ++i) {
-        Matiere * matiere = &semestre->matieres[i];
-        iLength = max(iLength, (int)strlen(matiere->szNom));
-    }
-    return iLength;
-}
-
-
-void printReleveLine(Matiere * matiere, unsigned int iMaxName) {
-    printf("%s", matiere->szNom);
-    for (int i = 0; i <= iMaxName - strlen(matiere->szNom); ++i) {
-        printf(" ");
-    }
-
-}
-
-int releve(Formation * form, Promotion * promotion) {
-    if (getNodeValueAsInt(1) < 1 || getNodeValueAsInt(1) > 2) {
+int releve(Formation * form, Promotion * promotion, int iIndSemestre) {
+    if (iIndSemestre < 1 || iIndSemestre > 2) {
         return 1;
     }
 
-    Semestre * semestre = &form->semestres[getNodeValueAsInt(1)-1];
+    Semestre * semestre = &form->semestres[iIndSemestre-1];
 
     Etudiant * etudiant = getEtudiantByName(promotion, getNodeValue(2)
                                             , 0);
 
+    NotesSemestre * nSemestre = &etudiant->semestres[iIndSemestre-1];
+
     if (etudiant == NULL) return 2;
+
+    if (coefficients(form, iIndSemestre) != 0) {
+        return 3;
+    }
+
+    if (!checkNotes(semestre, nSemestre)) {
+        return 4;
+    }
 
     unsigned int iMaxName = max(getLongestMatiereName(semestre), 8);
 
+    printUELine(iMaxName, form->uNbUE);
+    for (int i = 0; i < semestre->uNbMatieres; ++i) {
+        Matiere * matiere = &semestre->matieres[i];
+        printReleveLine(matiere,
+                        getEtudiantMatiereByName(semestre, nSemestre,
+                                                 matiere->szNom, false),
+                        iMaxName, form->uNbUE);
+    }
+    printf("--\n");
+    printMoyenneUELine(nSemestre, iMaxName, form->uNbUE, "Moyennes");
 
     return 0;
 }
+
+
+int decision(Formation * form, Promotion * promotion,
+             char szEtudiantName[]) {
+    Etudiant * etudiant = getEtudiantByName(promotion, szEtudiantName, false);
+
+    if (etudiant == NULL) {
+        return 1;
+    }
+
+    if (coefficients(form, 1) != 0 || coefficients(form, 1)) {
+        return 2;
+    }
+
+    if (notes(form, promotion, 1, szEtudiantName) != 0 ||
+        notes(form, promotion, 2, szEtudiantName) != 0) {
+        return 3;
+    }
+
+    printUELine(16, form->uNbUE);
+
+    for (int iIndSem = 0; iIndSem < 2; ++iIndSem) {
+        NotesSemestre *nSemestre = &etudiant->semestres[iIndSem];
+        char szSemestre[] = "S ";
+        szSemestre[1] = (char) iIndSem+49;
+        printMoyenneUELine(nSemestre, 16, form->uNbUE, szSemestre);
+        printf("\n");
+    }
+    printf("--\n");
+
+    bool isUEValidated[MAX_UE] = { false };
+    unsigned int uNbUEValidated = 0;
+    printMoyenneSem(etudiant, isUEValidated);
+    for (int iUE = 0; iUE < form->uNbUE; ++iUE) {
+        if (isUEValidated[iUE]) {
+            ++uNbUEValidated;
+        }
+    }
+}
+
 
 void callCommand(Formation * form, Promotion * promotion) {
     switch (getStringId(getNodeValue(0))) {
@@ -706,6 +886,7 @@ void callCommand(Formation * form, Promotion * promotion) {
                     break;
                 case 2:
                     printf("Le nombre d'UE est deja defini");
+                    break;
             }
             break;
         case 764: // epreuve
@@ -726,7 +907,7 @@ void callCommand(Formation * form, Promotion * promotion) {
             }
             break;
         case 1266: // coefficients
-            switch(coefficients(form)) {
+            switch(coefficients(form, getNodeValueAsInt(1))) {
                 case 0:
                     printf("Coefficients corrects");
                     break;
@@ -743,7 +924,9 @@ void callCommand(Formation * form, Promotion * promotion) {
             }
             break;
         case 438: // note
-            switch(note(form, promotion)) {
+            switch(note(form, promotion, getNodeValueAsInt(1),
+                        getNodeValue(2), getNodeValue(3),
+                        getNodeValue(4), getNodeValueAsFloat(5))) {
                 case 0:
                     printf("Note ajoutee a l'etudiant");
                     break;
@@ -761,10 +944,13 @@ void callCommand(Formation * form, Promotion * promotion) {
                     break;
                 case 5:
                     printf("Une note est deja definie pour cet etudiant");
+                    break;
             }
             break;
         case 553: // notes
-            switch(notes(form, promotion)) {
+            switch(notes(form, promotion,
+                         getNodeValueAsInt(1),
+                         getNodeValue(2))) {
                 case 0:
                     printf("Notes correctes");
                     break;
@@ -780,7 +966,22 @@ void callCommand(Formation * form, Promotion * promotion) {
             }
             break;
         case 643: // releve
-            printf("releve");
+            switch(releve(form, promotion, getNodeValueAsInt(1))) {
+                case 0:
+                    break;
+                case 1:
+                    printf("Le numero de semestre est incorrect");
+                    break;
+                case 2:
+                    printf("Etudiant inconnu");
+                    break;
+                case 3:
+                    printf("Les coefficients de ce semestre sont incorrects");
+                    break;
+                case 4:
+                    printf("Il manque au moins une note pour cet etudiant");
+                    break;
+            }
             break;
         case 846: // decision
             printf("decision");
